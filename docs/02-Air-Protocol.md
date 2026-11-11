@@ -263,9 +263,28 @@ attempts a second, so a blind forgery would take decades — while saving
 
 Neither part has an AES accelerator. The **STM32F429 has no CRYP block**
 (that is the F437 and F439), and the STM32G030 has none either. Both
-ends run the encrypt-only AES in `lora_crypto.c`: about 1.4 KB of code,
-and a CMAC over an 18-byte frame is two block encryptions — microseconds
-even on the 64 MHz node.
+ends run the encrypt-only AES in `lora_crypto.c`, and a CMAC over an
+18-byte frame is two block encryptions — microseconds even on the 64 MHz
+node.
+
+Two different sizes get quoted for this, so to be exact about what each
+covers. Measured with `arm-none-eabi-nm` on the v1.0.0 node image, the
+functions themselves come to **992 bytes**:
+
+| Symbol | Size |
+|---|---|
+| `Fn_AES128_Encrypt` | 420 B |
+| `Fn_CMAC` | 274 B |
+| `Fn_Crypto_Selftest` | 128 B |
+| `Fn_AES128_Init` | 120 B |
+| `Fn_Mic_Derive_Key` | 28 B |
+| `Fn_Mic_Compute` | 22 B |
+
+The **total flash cost of turning authentication on** is larger —
+**3064 bytes on the node, 3328 on the gateway** — because it also pulls
+in the S-box and round constants, the FIPS-197 and RFC 4493 test vectors
+the self-test checks against, and the call sites. That total is the
+number to budget against; the 992 is only the executable code.
 
 ### Report before enforce
 
