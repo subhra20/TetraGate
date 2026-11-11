@@ -1,0 +1,890 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LoRa Gateway Console</title>
+<style>
+/* ------------------------------------------------------------------ tokens
+   Dark by default, because this is a monitoring tool that tends to sit on a
+   second screen for hours. The radio colours are the same four used on the
+   gateway's own TFT, so a channel looks the same on both. */
+:root{
+  --bg:#0B0E13; --surface:#141922; --surface2:#1C232E; --surface3:#273140;
+  --border:#232C38; --text:#E8ECF2; --dim:#8A96A6; --faint:#5A6575;
+  --accent:#3B82F6; --accent-dim:#1E3A8A;
+  --ok:#22C55E; --warn:#F59E0B; --bad:#EF4444; --info:#06B6D4;
+  --r1:#3B9EFF; --r2:#F2A33C; --r3:#A78BFA; --r4:#2DD4BF;
+  --shadow:0 2px 14px rgba(0,0,0,.4);
+  --sidebar:232px;
+}
+html[data-theme="light"]{
+  --bg:#F5F7FA; --surface:#FFFFFF; --surface2:#F0F3F7; --surface3:#E3E9F0;
+  --border:#DDE3EB; --text:#121821; --dim:#5B6675; --faint:#8A95A4;
+  --shadow:0 2px 12px rgba(16,24,40,.08);
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--text);overflow:hidden;
+     font:14px/1.5 "Inter","Segoe UI",system-ui,-apple-system,sans-serif;
+     -webkit-font-smoothing:antialiased}
+::-webkit-scrollbar{width:9px;height:9px}
+::-webkit-scrollbar-thumb{background:var(--surface3);border-radius:5px}
+::-webkit-scrollbar-track{background:transparent}
+
+/* ------------------------------------------------------------------ shell */
+.app{display:flex;height:100vh}
+aside{width:var(--sidebar);flex:none;background:var(--surface);
+      border-right:1px solid var(--border);display:flex;flex-direction:column}
+.brand{padding:18px 18px 14px;display:flex;align-items:center;gap:10px}
+.brand .mark{width:30px;height:30px;border-radius:8px;flex:none;
+  background:linear-gradient(135deg,var(--accent),var(--info));
+  display:grid;place-items:center}
+.brand h1{font-size:14.5px;margin:0;font-weight:650;letter-spacing:.2px}
+.brand small{display:block;font-size:11px;color:var(--dim);font-weight:400}
+nav{padding:8px;flex:1;overflow-y:auto}
+nav a{display:flex;align-items:center;gap:11px;padding:9px 12px;border-radius:9px;
+      color:var(--dim);text-decoration:none;font-size:13.5px;font-weight:500;
+      margin-bottom:2px;transition:background .12s,color .12s}
+nav a:hover{background:var(--surface2);color:var(--text)}
+nav a.on{background:var(--accent);color:#fff}
+nav a.on svg{stroke:#fff}
+nav a svg{width:17px;height:17px;flex:none;stroke:currentColor;fill:none;
+          stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+nav a .count{margin-left:auto;font-size:11px;background:var(--surface3);
+             padding:1px 7px;border-radius:999px;color:var(--dim)}
+nav a.on .count{background:rgba(255,255,255,.22);color:#fff}
+.sidefoot{padding:12px 14px;border-top:1px solid var(--border);font-size:11.5px;
+          color:var(--dim)}
+.conn{display:flex;align-items:center;gap:8px;margin-bottom:5px}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--bad);flex:none}
+.dot.on{background:var(--ok);box-shadow:0 0 8px var(--ok)}
+
+main{flex:1;display:flex;flex-direction:column;min-width:0}
+.topbar{height:56px;flex:none;border-bottom:1px solid var(--border);
+        display:flex;align-items:center;gap:12px;padding:0 20px;background:var(--surface)}
+.topbar h2{font-size:16px;margin:0;font-weight:620}
+.topbar .sub{font-size:12px;color:var(--dim)}
+.grow{flex:1}
+.page{flex:1;overflow-y:auto;padding:20px}
+.page[hidden]{display:none}
+
+/* ----------------------------------------------------------------- atoms */
+button{background:var(--surface3);color:var(--text);border:1px solid transparent;
+       border-radius:8px;padding:7px 13px;font:inherit;font-size:13px;cursor:pointer;
+       transition:background .12s,opacity .12s}
+button:hover{filter:brightness(1.14)}
+button:disabled{opacity:.45;cursor:not-allowed}
+button.primary{background:var(--accent);color:#fff}
+button.danger{background:var(--bad);color:#fff}
+button.ghost{background:transparent;border-color:var(--border);color:var(--dim)}
+button.ghost.on{background:var(--accent);color:#fff;border-color:transparent}
+button.sm{padding:4px 10px;font-size:12px}
+input,select{background:var(--bg);color:var(--text);border:1px solid var(--border);
+             border-radius:8px;padding:7px 10px;font:inherit;font-size:13px;width:100%}
+input:focus,select:focus{outline:2px solid var(--accent);outline-offset:-1px}
+label.fld{display:block;font-size:11px;color:var(--dim);text-transform:uppercase;
+          letter-spacing:.6px;margin-bottom:5px;font-weight:600}
+
+.card{background:var(--surface);border:1px solid var(--border);border-radius:13px;
+      padding:16px;box-shadow:var(--shadow)}
+.card h3{margin:0 0 13px;font-size:12px;text-transform:uppercase;letter-spacing:.8px;
+         color:var(--dim);font-weight:650}
+.grid{display:grid;gap:14px}
+.pill{display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border-radius:999px;
+      font-size:11.5px;font-weight:600;background:var(--surface3);color:var(--dim)}
+.pill.ok{background:rgba(34,197,94,.15);color:var(--ok)}
+.pill.warn{background:rgba(245,158,11,.15);color:var(--warn)}
+.pill.bad{background:rgba(239,68,68,.15);color:var(--bad)}
+.pill.info{background:rgba(59,130,246,.15);color:var(--accent)}
+
+.kpi{background:var(--surface);border:1px solid var(--border);border-radius:13px;
+     padding:14px 16px;position:relative;overflow:hidden}
+.kpi .l{font-size:11px;color:var(--dim);text-transform:uppercase;letter-spacing:.7px;
+        font-weight:650}
+.kpi .v{font-size:25px;font-weight:680;line-height:1.2;margin-top:3px;
+        font-variant-numeric:tabular-nums}
+.kpi .d{font-size:11.5px;color:var(--faint);margin-top:1px}
+.kpi canvas{position:absolute;right:0;bottom:0;width:92px;height:36px;opacity:.5}
+
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;color:var(--dim);font-weight:600;font-size:10.5px;
+   text-transform:uppercase;letter-spacing:.6px;padding:0 10px 9px;white-space:nowrap}
+td{padding:8px 10px;border-top:1px solid var(--border);white-space:nowrap;
+   font-variant-numeric:tabular-nums}
+tbody tr{cursor:pointer}
+tbody tr:hover{background:var(--surface2)}
+.tag{display:inline-block;padding:1px 8px;border-radius:5px;font-size:11px;
+     font-weight:700;color:#0B0E13}
+.mono{font-family:"Cascadia Mono",Consolas,"SF Mono",monospace}
+
+canvas.chart{width:100%;height:300px;display:block;cursor:crosshair}
+.legend{display:flex;gap:7px;flex-wrap:wrap;margin-top:12px}
+.lg{display:inline-flex;align-items:center;gap:7px;background:var(--surface2);
+    border-radius:999px;padding:4px 12px;font-size:12px;cursor:pointer;user-select:none;
+    border:1px solid var(--border)}
+.lg.off{opacity:.35}
+.lg .sw{width:9px;height:9px;border-radius:2px;flex:none}
+.ctrls{display:flex;gap:7px;flex-wrap:wrap;align-items:center}
+.seg{display:inline-flex;background:var(--surface2);border-radius:9px;padding:3px;gap:2px}
+.seg button{background:transparent;padding:5px 11px;font-size:12.5px;border-radius:7px}
+.seg button.on{background:var(--accent);color:#fff}
+
+#feed{font-family:"Cascadia Mono",Consolas,monospace;font-size:11.5px;
+      height:320px;overflow-y:auto;line-height:1.7}
+#feed div{white-space:pre-wrap;word-break:break-all}
+.empty{color:var(--dim);text-align:center;padding:40px 0;font-size:13.5px}
+.muted{color:var(--dim)}
+
+/* drawer for node / packet detail */
+.scrim{position:fixed;inset:0;background:rgba(0,0,0,.5);opacity:0;pointer-events:none;
+       transition:opacity .16s;z-index:40}
+.scrim.on{opacity:1;pointer-events:auto}
+.drawer{position:fixed;top:0;right:0;bottom:0;width:470px;max-width:92vw;z-index:41;
+        background:var(--surface);border-left:1px solid var(--border);
+        transform:translateX(100%);transition:transform .2s cubic-bezier(.3,.8,.4,1);
+        display:flex;flex-direction:column}
+.drawer.on{transform:none}
+.drawer header{padding:16px 18px;border-bottom:1px solid var(--border);
+               display:flex;align-items:center;gap:10px}
+.drawer header h3{margin:0;font-size:15px;font-weight:650;text-transform:none;
+                  letter-spacing:0;color:var(--text)}
+.drawer .body{padding:18px;overflow-y:auto;flex:1}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:7px 16px;font-size:13px}
+.kv dt{color:var(--dim)}
+.kv dd{margin:0;text-align:right;font-variant-numeric:tabular-nums}
+
+#toasts{position:fixed;right:18px;bottom:18px;z-index:60;display:flex;
+        flex-direction:column;gap:9px}
+.toast{background:var(--surface);border:1px solid var(--border);border-left:3px solid var(--accent);
+       border-radius:10px;padding:11px 15px;font-size:13px;box-shadow:var(--shadow);
+       min-width:235px;animation:slide .22s ease}
+.toast.ok{border-left-color:var(--ok)} .toast.bad{border-left-color:var(--bad)}
+@keyframes slide{from{transform:translateX(24px);opacity:0}}
+
+.banner{background:rgba(245,158,11,.13);color:var(--warn);border:1px solid rgba(245,158,11,.3);
+        padding:11px 15px;border-radius:10px;margin-bottom:16px;font-size:13px}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <aside>
+    <div class="brand">
+      <div class="mark"><svg width="17" height="17" viewBox="0 0 24 24" fill="none"
+        stroke="#fff" stroke-width="2.1" stroke-linecap="round"><path d="M5 12a7 7 0 0114 0"/>
+        <path d="M8.5 15a3.5 3.5 0 017 0"/><circle cx="12" cy="19" r="1.4" fill="#fff"/></svg></div>
+      <div><h1>LoRa Gateway</h1><small>Console</small></div>
+    </div>
+    <nav id="nav"></nav>
+    <div class="sidefoot">
+      <div class="conn"><span class="dot" id="dot"></span><span id="connTxt">connecting…</span></div>
+      <div id="sideSub">—</div>
+    </div>
+  </aside>
+
+  <main>
+    <div class="topbar">
+      <div><h2 id="pageTitle">Dashboard</h2><div class="sub" id="pageSub"></div></div>
+      <span class="grow"></span>
+      <button class="ghost sm" id="themeBtn">Light</button>
+      <button class="ghost sm" id="pauseBtn">Pause</button>
+      <button class="sm" id="csvBtn">Export CSV</button>
+    </div>
+
+    <div class="page" id="p-dashboard"></div>
+    <div class="page" id="p-nodes" hidden></div>
+    <div class="page" id="p-packets" hidden></div>
+    <div class="page" id="p-config" hidden></div>
+    <div class="page" id="p-diag" hidden></div>
+  </main>
+</div>
+
+<div class="scrim" id="scrim"></div>
+<div class="drawer" id="drawer">
+  <header><h3 id="drawerTitle">Detail</h3><span class="grow"></span>
+    <button class="ghost sm" id="drawerClose">Close</button></header>
+  <div class="body" id="drawerBody"></div>
+</div>
+<div id="toasts"></div>
+
+<script>
+"use strict";
+
+/* =============================================================== constants */
+const RCOL = ["#3B9EFF","#F2A33C","#A78BFA","#2DD4BF"];
+const CSSV = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+
+const BW_KHZ = [7.8,10.4,15.6,20.8,31.25,41.7,62.5,125,250,500];
+const CR_TXT = {1:"4/5",2:"4/6",3:"4/7",4:"4/8"};
+const PWR_DBM = [11,14,17,20];
+const FREQ_MIN = 868000000, FREQ_MAX = 915000000, SPACING = 2000000;
+
+const METRICS = {
+  rssi:{label:"RSSI",unit:"dBm",get:p=>p.rssi,fmt:v=>v.toFixed(0)},
+  snr: {label:"SNR",unit:"dB",get:p=>p.snr,fmt:v=>v.toFixed(0)},
+  temp:{label:"Temperature",unit:"°C",get:p=>p.temp_cc===undefined?null:p.temp_cc/100,fmt:v=>v.toFixed(2)},
+  hum: {label:"Humidity",unit:"%",get:p=>p.hum_cp===undefined?null:p.hum_cp/100,fmt:v=>v.toFixed(2)},
+  batt:{label:"Battery",unit:"V",get:p=>p.batt_mv===undefined?null:p.batt_mv/1000,fmt:v=>v.toFixed(3)},
+};
+
+const PAGES = [
+  {id:"dashboard",name:"Dashboard",icon:'<path d="M3 13h8V3H3zM13 21h8V11h-8zM13 8h8V3h-8zM3 21h8v-5H3z"/>'},
+  {id:"nodes",name:"Nodes",icon:'<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M19 5l-2 2M7 17l-2 2"/>'},
+  {id:"packets",name:"Packets",icon:'<path d="M4 7h16M4 12h16M4 17h10"/>'},
+  {id:"config",name:"Configuration",icon:'<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.6 1.6 0 00.3 1.8l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.6 1.6 0 00-2.7 1.1V21a2 2 0 11-4 0v-.1A1.6 1.6 0 005 19.4l-.1.1a2 2 0 11-2.8-2.8l.1-.1A1.6 1.6 0 003 15a2 2 0 110-4 1.6 1.6 0 001.1-2.7L4 8.2a2 2 0 112.8-2.8l.1.1A1.6 1.6 0 009 5V4.9a2 2 0 114 0V5a1.6 1.6 0 002.7 1.1l.1-.1a2 2 0 112.8 2.8l-.1.1A1.6 1.6 0 0021 11a2 2 0 110 4z"/>'},
+  {id:"diag",name:"Diagnostics",icon:'<path d="M3 12h4l3 8 4-16 3 8h4"/>'},
+];
+
+/* ================================================================= state */
+let S = null;                 // last snapshot
+let packets = [];
+let cursor = 0, paused = false;
+let page = location.hash.slice(1) || "dashboard";
+let metric = "rssi", windowS = 300, hidden = new Set(), hover = null;
+let pktFilter = {radio:0, mic:"", frame:""};
+let drawerNode = null;
+const MAXPTS = 8000;
+
+/* =============================================================== plumbing */
+async function poll(){
+  if (paused) return;
+  try{
+    const r = await fetch("/api/state?since=" + cursor);
+    if (!r.ok) throw 0;
+    const d = await r.json();
+    if (d.packets?.length){
+      packets = packets.concat(d.packets);
+      if (packets.length > MAXPTS) packets = packets.slice(-MAXPTS);
+    }
+    cursor = d.cursor; S = d;
+    draw();
+  }catch(e){
+    document.getElementById("dot").className = "dot";
+    document.getElementById("connTxt").textContent = "bridge unreachable";
+  }
+}
+
+async function cmd(obj, label){
+  try{
+    const r = await fetch("/api/command", {method:"POST",
+      headers:{"Content-Type":"application/json"}, body:JSON.stringify(obj)});
+    const j = await r.json();
+    toast(j.ok ? (label||obj.cmd)+" sent" : "failed: "+j.msg, j.ok ? "ok" : "bad");
+    return j.ok;
+  }catch(e){ toast("bridge unreachable","bad"); return false; }
+}
+
+function toast(msg, kind){
+  const el = document.createElement("div");
+  el.className = "toast " + (kind||"");
+  el.textContent = msg;
+  document.getElementById("toasts").appendChild(el);
+  setTimeout(()=>el.remove(), 4200);
+}
+
+const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const ago = ts => { const s = Date.now()/1000 - ts;
+  return s<1?"now":s<60?Math.round(s)+"s":s<3600?Math.round(s/60)+"m":Math.round(s/3600)+"h"; };
+const rcol = r => RCOL[(r||1)-1] || CSSV("--dim");
+const qual = r => r>=-85?CSSV("--ok"):r>=-105?CSSV("--warn"):CSSV("--bad");
+
+/* ================================================================== nav */
+document.getElementById("nav").innerHTML = PAGES.map(p =>
+  `<a href="#${p.id}" data-p="${p.id}"><svg viewBox="0 0 24 24">${p.icon}</svg>${p.name}
+   <span class="count" id="cnt-${p.id}"></span></a>`).join("");
+
+function go(id){
+  page = id;
+  PAGES.forEach(p => {
+    document.getElementById("p-"+p.id).hidden = (p.id !== id);
+    document.querySelector(`nav a[data-p="${p.id}"]`).classList.toggle("on", p.id===id);
+  });
+  document.getElementById("pageTitle").textContent = PAGES.find(p=>p.id===id).name;
+  draw();
+}
+window.addEventListener("hashchange", () => go(location.hash.slice(1) || "dashboard"));
+
+/* =============================================================== drawing */
+function draw(){
+  if (!S) return;
+  const d = S;
+
+  document.getElementById("dot").className = "dot" + (d.connected?" on":"");
+  document.getElementById("connTxt").textContent =
+    d.connected ? (d.port||"serial") : "disconnected";
+  document.getElementById("sideSub").textContent =
+    `${d.stats.total} packets · ${d.stats.rate_per_min}/min`;
+
+  document.getElementById("cnt-nodes").textContent = d.nodes.length || "";
+  document.getElementById("cnt-packets").textContent = d.stats.total || "";
+
+  const gw = d.gateway;
+  document.getElementById("pageSub").textContent = gw
+    ? `gateway up · ${gw.nodes} nodes · heap ${(gw.heap/1024).toFixed(1)} kB`
+    : "waiting for gateway status";
+
+  if (page==="dashboard") drawDashboard(d);
+  if (page==="nodes")     drawNodes(d);
+  if (page==="packets")   drawPackets(d);
+  if (page==="config")    drawConfig(d);
+  if (page==="diag")      drawDiag(d);
+}
+
+/* ------------------------------------------------------------- dashboard */
+function drawDashboard(d){
+  const gw = d.gateway || {};
+  const el = document.getElementById("p-dashboard");
+
+  if (!el.dataset.built){
+    el.innerHTML = `
+      <div id="dashBanner"></div>
+      <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(168px,1fr));margin-bottom:16px" id="kpis"></div>
+      <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(252px,1fr));margin-bottom:16px" id="radioCards"></div>
+      <div class="card">
+        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14px">
+          <h3 style="margin:0">Live measurements</h3><span class="grow" style="flex:1"></span>
+          <div class="seg" id="metricSeg"></div>
+          <div class="seg" id="winSeg"></div>
+        </div>
+        <canvas class="chart" id="chart"></canvas>
+        <div class="legend" id="legend"></div>
+      </div>`;
+    el.dataset.built = "1";
+    document.getElementById("metricSeg").innerHTML =
+      Object.entries(METRICS).map(([k,m])=>`<button data-m="${k}">${m.label}</button>`).join("");
+    document.getElementById("winSeg").innerHTML =
+      [[60,"1m"],[300,"5m"],[900,"15m"],[0,"All"]].map(([w,t])=>`<button data-w="${w}">${t}</button>`).join("");
+    document.getElementById("metricSeg").onclick = e => {
+      const b = e.target.closest("button"); if(!b) return;
+      metric = b.dataset.m; syncSegs(); drawChart(); };
+    document.getElementById("winSeg").onclick = e => {
+      const b = e.target.closest("button"); if(!b) return;
+      windowS = +b.dataset.w; syncSegs(); drawChart(); };
+    document.getElementById("legend").onclick = e => {
+      const t = e.target.closest(".lg"); if(!t) return;
+      const n = +t.dataset.node; hidden.has(n)?hidden.delete(n):hidden.add(n); drawChart(); };
+    const cv = document.getElementById("chart");
+    cv.onmousemove = e => { const r = cv.getBoundingClientRect();
+      hover = {x:e.clientX-r.left, y:e.clientY-r.top}; drawChart(); };
+    cv.onmouseleave = () => { hover=null; drawChart(); };
+    syncSegs();
+  }
+
+  const b = document.getElementById("dashBanner");
+  const warn = d.schema_warning ||
+    (gw.crypto_ok === 0 ? "Gateway crypto self-test FAILED - MIC verification is meaningless" : null) ||
+    (gw.mic_fail > 0 ? `${gw.mic_fail} frame(s) failed authentication and were dropped` : null);
+  b.innerHTML = warn ? `<div class="banner">${esc(warn)}</div>` : "";
+
+  const kpis = [
+    ["Packets", d.stats.total, "total received", p=>1],
+    ["Rate", d.stats.rate_per_min, "per minute", null],
+    ["Nodes", gw.nodes ?? "–", `${gw.silent ?? 0} silent`, null],
+    ["Authenticated", gw.mic_ok ?? "–", `${gw.no_mic ?? 0} legacy`, null],
+    ["MIC failures", gw.mic_fail ?? "–", gw.mic_required ? "enforcing" : "report only", null],
+    ["Heap", gw.heap ? (gw.heap/1024).toFixed(1)+" kB" : "–", "free on gateway", null],
+  ];
+  document.getElementById("kpis").innerHTML = kpis.map(([l,v,s]) =>
+    `<div class="kpi"><div class="l">${l}</div><div class="v">${v}</div><div class="d">${s}</div></div>`).join("");
+
+  if (gw.radios){
+    document.getElementById("radioCards").innerHTML = gw.radios.map(r=>{
+      const c = rcol(r.n);
+      const st = r.en===0 ? ["off","pill"] : r.ok===1 ? ["healthy","pill ok"] : ["FAULT","pill bad"];
+      return `<div class="card" style="border-top:3px solid ${c}">
+        <div style="display:flex;align-items:center;gap:9px;margin-bottom:11px">
+          <b style="color:${c};font-size:15px">R${r.n}</b>
+          <span class="${st[1]}">${st[0]}</span>
+          <span class="grow" style="flex:1"></span>
+          <span class="muted" style="font-size:12px">${(r.freq/1e6).toFixed(3)} MHz</span></div>
+        ${gauge(r.rssi, r.good > 0)}
+        <dl class="kv" style="margin-top:12px">
+          <dt>RSSI / SNR</dt><dd>${r.good ? `${r.rssi} dBm / ${r.snr} dB` : "–"}</dd>
+          <dt>Accepted</dt><dd>${r.good}</dd>
+          <dt>CRC / dup / blocked</dt><dd>${r.crc} / ${r.dup} / ${r.blk}</dd>
+          ${r.reinit?`<dt>Re-inits</dt><dd style="color:var(--warn)">${r.reinit}</dd>`:""}
+        </dl></div>`;
+    }).join("");
+  }
+  drawChart();
+}
+
+function syncSegs(){
+  document.querySelectorAll("#metricSeg button").forEach(b=>b.classList.toggle("on",b.dataset.m===metric));
+  document.querySelectorAll("#winSeg button").forEach(b=>b.classList.toggle("on",+b.dataset.w===windowS));
+}
+
+/* Radial arc: reads as a signal meter at a glance without the number.
+   A radio that has heard nothing reports RSSI 0, which is numerically a
+   very strong signal and would otherwise paint a full green arc on a
+   dead channel - the most misleading thing this screen could do. That
+   case gets an explicit empty state instead. */
+function gauge(rssi, heard){
+  const R = 34, C = Math.PI * R;                 // half circle
+  const track = `<path d="M11 42 A34 34 0 0 1 79 42" fill="none"
+        stroke="${CSSV("--surface3")}" stroke-width="8" stroke-linecap="round"/>`;
+
+  if (!heard){
+    return `<svg viewBox="0 0 90 48" style="width:100%;height:56px">${track}
+      <text x="45" y="39" text-anchor="middle" fill="${CSSV("--faint")}"
+            style="font:600 11px Inter,sans-serif">no signal</text></svg>`;
+  }
+
+  const pct = Math.max(0, Math.min(1, (rssi + 120) / 90));
+  return `<svg viewBox="0 0 90 48" style="width:100%;height:56px">${track}
+    <path d="M11 42 A34 34 0 0 1 79 42" fill="none" stroke="${qual(rssi)}"
+          stroke-width="8" stroke-linecap="round"
+          stroke-dasharray="${(C*pct).toFixed(1)} ${C.toFixed(1)}"/>
+    <text x="45" y="39" text-anchor="middle" fill="${CSSV("--text")}"
+          style="font:700 15px Inter,sans-serif">${rssi}</text>
+    <text x="45" y="47" text-anchor="middle" fill="${CSSV("--dim")}"
+          style="font:400 8px Inter,sans-serif">dBm</text></svg>`;
+}
+
+/* ----------------------------------------------------------------- chart */
+function buildSeries(){
+  const m = METRICS[metric];
+  const cut = windowS ? Date.now()/1000 - windowS : 0;
+  const by = new Map();
+  for (const p of packets){
+    if (p.ts < cut) continue;
+    const v = m.get(p);
+    if (v === null || v === undefined) continue;
+    if (!by.has(p.node)) by.set(p.node, []);
+    by.get(p.node).push({t:p.ts, v});
+  }
+  return [...by.entries()].sort((a,b)=>a[0]-b[0]).map(([node,pts],i)=>({
+    node, pts, color:RCOL[i%RCOL.length], visible:!hidden.has(node)}));
+}
+
+function drawChart(){
+  const cv = document.getElementById("chart"); if (!cv) return;
+  const dpr = devicePixelRatio||1, w = cv.clientWidth, h = cv.clientHeight;
+  cv.width = w*dpr; cv.height = h*dpr;
+  const g = cv.getContext("2d"); g.setTransform(dpr,0,0,dpr,0,0); g.clearRect(0,0,w,h);
+
+  const m = METRICS[metric], series = buildSeries();
+  const vis = series.filter(s=>s.visible && s.pts.length);
+
+  document.getElementById("legend").innerHTML = series.map(s =>
+    `<span class="lg ${s.visible?"":"off"}" data-node="${s.node}">
+      <span class="sw" style="background:${s.color}"></span>${s.node}</span>`).join("")
+    || '<span class="muted">no data in this window</span>';
+
+  const P = {l:56,r:16,t:16,b:28}, pw = w-P.l-P.r, ph = h-P.t-P.b;
+  if (!vis.length){
+    g.fillStyle = CSSV("--dim"); g.font="13px Inter,sans-serif"; g.textAlign="center";
+    g.fillText("Waiting for data…", w/2, h/2); return;
+  }
+
+  let t0=Infinity,t1=-Infinity,v0=Infinity,v1=-Infinity;
+  for (const s of vis) for (const p of s.pts){
+    if(p.t<t0)t0=p.t; if(p.t>t1)t1=p.t; if(p.v<v0)v0=p.v; if(p.v>v1)v1=p.v; }
+  if (t1-t0 < 1) t1 = t0+1;
+  const sp = v1-v0 || 1; v0 -= sp*.14; v1 += sp*.14;
+  const X = t => P.l + (t-t0)/(t1-t0)*pw, Y = v => P.t + ph - (v-v0)/(v1-v0)*ph;
+
+  g.strokeStyle = CSSV("--border"); g.lineWidth=1;
+  g.fillStyle = CSSV("--dim"); g.font="11px Inter,sans-serif"; g.textAlign="right";
+  for (let i=0;i<=4;i++){
+    const v = v0+(v1-v0)*i/4, y = Math.round(Y(v))+.5;
+    g.beginPath(); g.moveTo(P.l,y); g.lineTo(P.l+pw,y); g.stroke();
+    g.fillText(m.fmt(v), P.l-9, y+3.5);
+  }
+  let last="";
+  for (let i=0;i<=4;i++){
+    const t = t0+(t1-t0)*i/4, txt = new Date(t*1000).toLocaleTimeString([],{hour12:false});
+    if (txt===last) continue; last = txt;
+    g.textAlign = i===0?"left":i===4?"right":"center";
+    g.fillText(txt, X(t), h-9);
+  }
+  g.textAlign="left"; g.fillStyle=CSSV("--dim");
+  g.fillText(`${m.label} (${m.unit})`, P.l+7, P.t+13);
+
+  for (const s of vis){
+    // soft area under the line, then the line itself
+    const grd = g.createLinearGradient(0,P.t,0,P.t+ph);
+    grd.addColorStop(0, s.color+"3A"); grd.addColorStop(1, s.color+"00");
+    g.beginPath(); g.moveTo(X(s.pts[0].t), P.t+ph);
+    s.pts.forEach(p=>g.lineTo(X(p.t),Y(p.v)));
+    g.lineTo(X(s.pts[s.pts.length-1].t), P.t+ph); g.closePath();
+    g.fillStyle = grd; g.fill();
+
+    g.strokeStyle=s.color; g.lineWidth=2; g.lineJoin="round"; g.beginPath();
+    s.pts.forEach((p,i)=> i?g.lineTo(X(p.t),Y(p.v)):g.moveTo(X(p.t),Y(p.v)));
+    g.stroke();
+    if (s.pts.length < 120){ g.fillStyle=s.color;
+      for (const p of s.pts){ g.beginPath(); g.arc(X(p.t),Y(p.v),2.4,0,7); g.fill(); } }
+  }
+
+  if (hover && hover.x>P.l && hover.x<P.l+pw){
+    const tAt = t0 + (hover.x-P.l)/pw*(t1-t0);
+    g.strokeStyle="rgba(138,150,166,.45)"; g.lineWidth=1;
+    g.beginPath(); g.moveTo(hover.x,P.t); g.lineTo(hover.x,P.t+ph); g.stroke();
+    const rows=[];
+    for (const s of vis){
+      let best=null,bd=Infinity;
+      for (const p of s.pts){ const dd=Math.abs(p.t-tAt); if(dd<bd){bd=dd;best=p;} }
+      if (best && bd < (t1-t0)/12){ rows.push({s,p:best});
+        g.fillStyle=s.color; g.beginPath(); g.arc(X(best.t),Y(best.v),4.2,0,7); g.fill(); }
+    }
+    if (rows.length){
+      const lines = rows.map(r=>`${r.s.node}   ${m.fmt(r.p.v)} ${m.unit}`);
+      const time = new Date(rows[0].p.t*1000).toLocaleTimeString([],{hour12:false});
+      g.font="11.5px Inter,sans-serif";
+      const bw = Math.max(...lines.map(l=>g.measureText(l).width), g.measureText(time).width)+20;
+      const bh = lines.length*16+26;
+      let bx = hover.x+13; if (bx+bw > P.l+pw) bx = hover.x-bw-13;
+      const by = Math.min(Math.max(P.t, hover.y-bh/2), P.t+ph-bh);
+      g.fillStyle=CSSV("--surface2"); g.strokeStyle=CSSV("--border");
+      g.beginPath(); g.roundRect(bx,by,bw,bh,9); g.fill(); g.stroke();
+      g.fillStyle=CSSV("--dim"); g.textAlign="left"; g.fillText(time,bx+10,by+16);
+      rows.forEach((r,i)=>{ g.fillStyle=r.s.color; g.fillText(lines[i],bx+10,by+34+i*16); });
+    }
+  }
+}
+
+/* ----------------------------------------------------------------- nodes */
+function drawNodes(d){
+  const el = document.getElementById("p-nodes");
+  if (!d.nodes.length){ el.innerHTML = '<div class="empty">No nodes heard yet</div>'; return; }
+  el.innerHTML = `<div class="card"><h3>Heard nodes</h3>
+    <table><thead><tr><th>Node</th><th>Radio</th><th>Auth</th><th>Seq</th><th>Last</th>
+      <th>RSSI</th><th>SNR</th><th>Temp</th><th>Hum</th><th>Battery</th><th>Packets</th></tr></thead>
+    <tbody>${d.nodes.map(n=>{
+      const mic = n.mic==="ok" ? '<span class="pill ok">signed</span>'
+                : n.mic==="fail" ? '<span class="pill bad">bad MIC</span>'
+                : '<span class="pill warn">legacy</span>';
+      const age = Date.now()/1000 - n.ts;
+      return `<tr data-node="${n.node}">
+        <td><b>${n.node}</b></td>
+        <td><span class="tag" style="background:${rcol(n.radio)}">R${n.radio}</span></td>
+        <td>${mic}</td><td class="muted">${n.seq??"–"}</td>
+        <td${age>60?' style="color:var(--bad)"':''}>${ago(n.ts)}</td>
+        <td style="color:${qual(n.rssi)}">${n.rssi??"–"}</td>
+        <td class="muted">${n.snr??"–"}</td>
+        <td>${n.temp_cc===undefined?"–":(n.temp_cc/100).toFixed(2)+"°C"}</td>
+        <td>${n.hum_cp===undefined?"–":(n.hum_cp/100).toFixed(1)+"%"}</td>
+        <td>${n.batt_mv===undefined?"–":(n.batt_mv/1000).toFixed(3)+" V"}</td>
+        <td class="muted">${n.packets}</td></tr>`;}).join("")}</tbody></table>
+    <div class="muted" style="margin-top:11px;font-size:12px">Select a row for history.</div></div>`;
+  el.querySelector("tbody").onclick = e => {
+    const tr = e.target.closest("tr"); if (!tr) return; openNode(+tr.dataset.node); };
+}
+
+function openNode(id){
+  drawerNode = id;
+  const n = (S.nodes||[]).find(x=>x.node===id); if (!n) return;
+  document.getElementById("drawerTitle").textContent = "Node " + id;
+  const hist = packets.filter(p=>p.node===id);
+  const rows = [
+    ["Radio", "R"+n.radio], ["Authentication", n.mic||"–"],
+    ["Last sequence", n.seq], ["Packets seen", n.packets],
+    ["Duplicates", n.dups ?? "–"],
+    ["Reported interval", n.interval_ms ? (n.interval_ms/1000).toFixed(1)+" s" : "–"],
+    ["RSSI", (n.rssi??"–")+" dBm"], ["SNR", (n.snr??"–")+" dB"],
+    ["Temperature", n.temp_cc===undefined?"–":(n.temp_cc/100).toFixed(2)+" °C"],
+    ["Humidity", n.hum_cp===undefined?"–":(n.hum_cp/100).toFixed(2)+" %"],
+    ["Battery", n.batt_mv===undefined?"–":(n.batt_mv/1000).toFixed(3)+" V"],
+    ["Node uptime", n.uptime_s===undefined?"–":fmtUp(n.uptime_s)],
+    ["Last heard", ago(n.ts)+" ago"],
+  ];
+  document.getElementById("drawerBody").innerHTML =
+    `<dl class="kv">${rows.map(([k,v])=>`<dt>${k}</dt><dd>${esc(v)}</dd>`).join("")}</dl>
+     <div class="card" style="margin-top:16px"><h3>RSSI history</h3>
+       <canvas id="ndChart" style="width:100%;height:130px"></canvas></div>
+     <div class="card" style="margin-top:12px"><h3>Temperature history</h3>
+       <canvas id="ndChart2" style="width:100%;height:130px"></canvas></div>
+     <div class="muted" style="margin-top:10px;font-size:12px">${hist.length} samples held</div>`;
+  mini("ndChart", hist.map(p=>({t:p.ts,v:p.rssi})), rcol(n.radio));
+  mini("ndChart2", hist.filter(p=>p.temp_cc!==undefined).map(p=>({t:p.ts,v:p.temp_cc/100})), CSSV("--info"));
+  document.getElementById("scrim").classList.add("on");
+  document.getElementById("drawer").classList.add("on");
+}
+const fmtUp = s => `${Math.floor(s/3600)}h ${Math.floor(s/60)%60}m`;
+
+function mini(id, pts, color){
+  const cv = document.getElementById(id); if (!cv || !pts.length) return;
+  const dpr = devicePixelRatio||1, w = cv.clientWidth, h = cv.clientHeight;
+  cv.width=w*dpr; cv.height=h*dpr;
+  const g = cv.getContext("2d"); g.setTransform(dpr,0,0,dpr,0,0);
+  let v0=Infinity,v1=-Infinity; for(const p of pts){ if(p.v<v0)v0=p.v; if(p.v>v1)v1=p.v; }
+  const sp = v1-v0||1; v0-=sp*.15; v1+=sp*.15;
+  const t0=pts[0].t, t1=pts[pts.length-1].t||t0+1;
+  const X=t=>6+(t-t0)/((t1-t0)||1)*(w-12), Y=v=>h-8-(v-v0)/(v1-v0)*(h-18);
+  const grd=g.createLinearGradient(0,0,0,h); grd.addColorStop(0,color+"44"); grd.addColorStop(1,color+"00");
+  g.beginPath(); g.moveTo(X(t0),h); pts.forEach(p=>g.lineTo(X(p.t),Y(p.v)));
+  g.lineTo(X(t1),h); g.closePath(); g.fillStyle=grd; g.fill();
+  g.strokeStyle=color; g.lineWidth=1.9; g.beginPath();
+  pts.forEach((p,i)=>i?g.lineTo(X(p.t),Y(p.v)):g.moveTo(X(p.t),Y(p.v))); g.stroke();
+  g.fillStyle=CSSV("--dim"); g.font="10px Inter,sans-serif"; g.textAlign="left";
+  g.fillText(v1.toFixed(1), 6, 11); g.fillText(v0.toFixed(1), 6, h-2);
+}
+
+function closeDrawer(){
+  document.getElementById("scrim").classList.remove("on");
+  document.getElementById("drawer").classList.remove("on"); drawerNode=null;
+}
+document.getElementById("scrim").onclick = closeDrawer;
+document.getElementById("drawerClose").onclick = closeDrawer;
+
+/* --------------------------------------------------------------- packets */
+function drawPackets(d){
+  const el = document.getElementById("p-packets");
+  if (!el.dataset.built){
+    el.innerHTML = `<div class="card"><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:13px">
+      <h3 style="margin:0">Live packets</h3><span style="flex:1"></span>
+      <select id="fRadio" style="width:120px"><option value="0">All radios</option>
+        <option value="1">R1</option><option value="2">R2</option>
+        <option value="3">R3</option><option value="4">R4</option></select>
+      <select id="fMic" style="width:140px"><option value="">Any auth</option>
+        <option value="ok">Signed</option><option value="none">Legacy</option>
+        <option value="fail">Bad MIC</option></select>
+      <select id="fFrame" style="width:130px"><option value="">Any frame</option>
+        <option value="data">Data</option><option value="status">Status</option>
+        <option value="unknown">Unknown</option></select></div>
+      <div id="pktTable"></div></div>`;
+    el.dataset.built="1";
+    ["fRadio","fMic","fFrame"].forEach(id=>document.getElementById(id).onchange=()=>{
+      pktFilter.radio=+document.getElementById("fRadio").value;
+      pktFilter.mic=document.getElementById("fMic").value;
+      pktFilter.frame=document.getElementById("fFrame").value;
+      drawPackets(S); });
+  }
+  let list = packets.slice(-400).reverse();
+  if (pktFilter.radio) list = list.filter(p=>p.radio===pktFilter.radio);
+  if (pktFilter.mic)   list = list.filter(p=>(p.mic||"none")===pktFilter.mic);
+  if (pktFilter.frame) list = list.filter(p=>p.frame===pktFilter.frame);
+
+  document.getElementById("pktTable").innerHTML = !list.length
+    ? '<div class="empty">No packets match</div>'
+    : `<table><thead><tr><th>Time</th><th>Radio</th><th>Node</th><th>Seq</th><th>Frame</th>
+       <th>Auth</th><th>Bytes</th><th>RSSI</th><th>SNR</th></tr></thead><tbody>
+       ${list.slice(0,180).map(p=>`<tr data-i="${p.i}">
+         <td class="muted mono">${new Date(p.ts*1000).toLocaleTimeString([],{hour12:false})}</td>
+         <td><span class="tag" style="background:${rcol(p.radio)}">R${p.radio}</span></td>
+         <td><b>${p.node}</b></td><td class="muted">${p.seq}</td>
+         <td>${p.frame}</td>
+         <td>${p.mic==="ok"?'<span class="pill ok">signed</span>'
+             :p.mic==="fail"?'<span class="pill bad">bad</span>'
+             :'<span class="pill warn">legacy</span>'}</td>
+         <td class="muted">${p.len}</td>
+         <td style="color:${qual(p.rssi)}">${p.rssi}</td>
+         <td class="muted">${p.snr}</td></tr>`).join("")}</tbody></table>`;
+
+  const tb = document.querySelector("#pktTable tbody");
+  if (tb) tb.onclick = e => { const tr = e.target.closest("tr"); if(!tr) return;
+    openPacket(packets.find(p=>p.i===+tr.dataset.i)); };
+}
+
+function openPacket(p){
+  if (!p) return;
+  document.getElementById("drawerTitle").textContent = `Packet #${p.i}`;
+  const rows = [
+    ["Received", new Date(p.ts*1000).toLocaleString()],
+    ["Gateway radio", "R"+p.radio], ["Node ID", p.node], ["Sequence", p.seq],
+    ["Frame type", p.frame], ["Authentication", p.mic || "–"],
+    ["On-air length", p.len + " bytes"],
+    ["RSSI", p.rssi + " dBm"], ["SNR", p.snr + " dB"],
+    ["Gateway tick", p.t_ms + " ms"],
+  ];
+  if (p.temp_cc!==undefined) rows.push(["Temperature", (p.temp_cc/100).toFixed(2)+" °C"]);
+  if (p.hum_cp!==undefined)  rows.push(["Humidity", (p.hum_cp/100).toFixed(2)+" %"]);
+  if (p.batt_mv!==undefined) rows.push(["Battery", (p.batt_mv/1000).toFixed(3)+" V"]);
+  if (p.uptime_s!==undefined)rows.push(["Node uptime", fmtUp(p.uptime_s)]);
+  if (p.raw) rows.push(["Raw preview", p.raw]);
+
+  const body = p.len - (p.mic==="none"||!p.mic ? 0 : 4);
+  document.getElementById("drawerBody").innerHTML =
+    `<dl class="kv">${rows.map(([k,v])=>`<dt>${k}</dt><dd class="mono">${esc(v)}</dd>`).join("")}</dl>
+     <div class="card" style="margin-top:16px"><h3>Frame layout</h3>
+       <div class="mono" style="font-size:12px;line-height:1.9;color:var(--dim)">
+         [0]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;${p.frame}${p.mic==="ok"?" (MIC flag set)":""}<br>
+         [1..2]&nbsp;&nbsp;node&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;${p.node} little endian<br>
+         [3]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;sequence&nbsp;&nbsp;${p.seq}<br>
+         [4..${body-1}]&nbsp;&nbsp;payload&nbsp;&nbsp;&nbsp;${body-4} bytes<br>
+         ${p.mic && p.mic!=="none" ? `[${body}..${p.len-1}]&nbsp;&nbsp;MIC&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;4 bytes, ${p.mic}` : "no MIC on this frame"}
+       </div></div>`;
+  document.getElementById("scrim").classList.add("on");
+  document.getElementById("drawer").classList.add("on");
+}
+
+/* ---------------------------------------------------------------- config */
+function drawConfig(d){
+  const el = document.getElementById("p-config");
+  const cfg = d.config;
+  if (!cfg){
+    el.innerHTML = `<div class="empty">No configuration received yet.<br><br>
+      <button class="primary" onclick="cmd({cmd:'get_config'},'get_config')">Request configuration</button></div>`;
+    return;
+  }
+  if (el.dataset.sig === JSON.stringify(cfg.radios)) return;   // don't fight the user's typing
+  el.dataset.sig = JSON.stringify(cfg.radios);
+
+  el.innerHTML = `
+    <div class="banner" style="background:rgba(59,130,246,.1);border-color:rgba(59,130,246,.3);color:var(--accent)">
+      <b>Apply</b> changes the running radio immediately but is lost on reboot.
+      <b>Save</b> writes the configuration to EEPROM. Same split as the touchscreen.
+    </div>
+    <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(310px,1fr));margin-bottom:16px">
+    ${cfg.radios.map(r=>`
+      <div class="card" style="border-top:3px solid ${rcol(r.n)}" data-radio="${r.n}">
+        <div style="display:flex;align-items:center;gap:9px;margin-bottom:14px">
+          <b style="color:${rcol(r.n)};font-size:15px">Radio ${r.n}</b>
+          <span class="grow" style="flex:1"></span>
+          <label style="display:flex;align-items:center;gap:7px;font-size:12.5px;color:var(--dim)">
+            <input type="checkbox" class="c-en" style="width:auto" ${r.en?"checked":""}> enabled</label>
+        </div>
+        <div class="grid" style="grid-template-columns:1fr 1fr;gap:11px">
+          <div style="grid-column:1/-1"><label class="fld">Frequency (Hz)</label>
+            <input type="number" class="c-freq" value="${r.freq}" step="100000"
+                   min="${FREQ_MIN}" max="${FREQ_MAX}">
+            <div class="muted" style="font-size:11.5px;margin-top:4px" class="c-mhz">${(r.freq/1e6).toFixed(3)} MHz</div></div>
+          <div><label class="fld">Spreading factor</label><select class="c-sf">
+            ${[7,8,9,10,11,12].map(v=>`<option value="${v}" ${v===r.sf?"selected":""}>SF${v}</option>`).join("")}</select></div>
+          <div><label class="fld">Bandwidth</label><select class="c-bw">
+            ${BW_KHZ.map((k,i)=>`<option value="${i}" ${i===r.bw?"selected":""}>${k} kHz</option>`).join("")}</select></div>
+          <div><label class="fld">Coding rate</label><select class="c-cr">
+            ${Object.entries(CR_TXT).map(([v,t])=>`<option value="${v}" ${+v===r.cr?"selected":""}>${t}</option>`).join("")}</select></div>
+          <div><label class="fld">TX power</label><select class="c-pwr">
+            ${PWR_DBM.map((p,i)=>`<option value="${i}" ${i===r.pwr?"selected":""}>${p} dBm</option>`).join("")}</select></div>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:14px">
+          <button class="primary c-apply" style="flex:1">Apply</button>
+          <span class="pill ${r.sts===1?"ok":r.sts===2?"":"bad"}">${
+            r.sts===1?"running":r.sts===2?"off":"not found"}</span>
+        </div>
+      </div>`).join("")}
+    </div>
+    <div class="card"><h3>Gateway actions</h3>
+      <div class="ctrls">
+        <button class="primary" id="saveBtn">Save to EEPROM</button>
+        <button id="reloadBtn">Reload from gateway</button>
+        <button id="clearBtn">Clear statistics</button>
+        <button class="ghost ${cfg.mic_required?"on":""}" id="micBtn">
+          MIC ${cfg.mic_required?"enforced":"report only"}</button>
+        <span style="flex:1"></span>
+        <button class="danger" id="rebootBtn">Reboot gateway</button>
+      </div>
+      <div class="muted" style="margin-top:11px;font-size:12px">
+        Enforcing MIC drops every frame from a node that has not been reflashed.
+        Check the Nodes page shows all nodes as <b>signed</b> first.
+        The policy is not persisted &mdash; a reboot returns to the compiled default.
+      </div></div>`;
+
+  el.querySelectorAll(".card[data-radio]").forEach(card=>{
+    const n = +card.dataset.radio;
+    const freq = card.querySelector(".c-freq");
+    freq.oninput = () => { const m = card.querySelector(".muted");
+      if (m) m.textContent = (freq.value/1e6).toFixed(3) + " MHz"; };
+    card.querySelector(".c-apply").onclick = async () => {
+      const body = {cmd:"set_radio", n,
+        en:  card.querySelector(".c-en").checked?1:0,
+        freq:+freq.value,
+        sf:  +card.querySelector(".c-sf").value,
+        bw:  +card.querySelector(".c-bw").value,
+        cr:  +card.querySelector(".c-cr").value,
+        pwr: +card.querySelector(".c-pwr").value};
+      const err = validate(body, cfg);
+      if (err){ toast(err, "bad"); return; }
+      if (await cmd(body, `radio ${n} apply`)){
+        setTimeout(()=>cmd({cmd:"get_config"}), 400); el.dataset.sig = ""; }
+    };
+  });
+  document.getElementById("saveBtn").onclick   = ()=>cmd({cmd:"save"}, "save");
+  document.getElementById("reloadBtn").onclick = ()=>{ el.dataset.sig=""; cmd({cmd:"get_config"}); };
+  document.getElementById("clearBtn").onclick  = ()=>cmd({cmd:"clear_stats"}, "clear");
+  document.getElementById("micBtn").onclick    = ()=>{
+    cmd({cmd:"set_mic_policy", require: cfg.mic_required?0:1}, "MIC policy");
+    setTimeout(()=>{ el.dataset.sig=""; cmd({cmd:"get_config"}); }, 400); };
+  document.getElementById("rebootBtn").onclick = ()=>{
+    if (confirm("Reboot the gateway? Unsaved changes are lost.")) cmd({cmd:"reboot"},"reboot"); };
+}
+
+/* Mirrors Fn_LoRa_Config_Validate on the gateway, so a bad value is
+   caught here with a clear message instead of coming back as a refusal. */
+function validate(body, cfg){
+  if (body.freq < FREQ_MIN || body.freq > FREQ_MAX)
+    return `Frequency must be ${(FREQ_MIN/1e6).toFixed(0)}-${(FREQ_MAX/1e6).toFixed(0)} MHz`;
+  if (!body.en) return null;
+  for (const r of cfg.radios){
+    if (r.n === body.n || !r.en) continue;
+    if (Math.abs(r.freq - body.freq) < SPACING)
+      return `Too close to R${r.n} at ${(r.freq/1e6).toFixed(3)} MHz - needs 2 MHz spacing`;
+  }
+  return null;
+}
+
+/* ----------------------------------------------------------- diagnostics */
+function drawDiag(d){
+  const gw = d.gateway || {}, el = document.getElementById("p-diag");
+  const rows = [
+    ["Bridge uptime", d.stats.bridge_uptime_s + " s"],
+    ["Serial port", d.port || "–"],
+    ["Protocol schema", d.schema ?? "–"],
+    ["Status line age", gw.age_s!==undefined ? gw.age_s + " s" : "–"],
+    ["Gateway tick", gw.t_ms!==undefined ? gw.t_ms + " ms" : "–"],
+    ["Free heap", gw.heap!==undefined ? gw.heap + " B" : "–"],
+    ["Task stall mask", gw.stall!==undefined ? "0x"+gw.stall.toString(16) : "–"],
+    ["Uplink lines dropped", gw.dropped ?? "–"],
+    ["Partial lines seen", d.stats.parse_errors],
+    ["Crypto self-test", gw.crypto_ok===1 ? "PASS" : gw.crypto_ok===0 ? "FAIL" : "–"],
+    ["MIC accepted", gw.mic_ok ?? "–"],
+    ["MIC failed", gw.mic_fail ?? "–"],
+    ["Unauthenticated", gw.no_mic ?? "–"],
+    ["MIC policy", gw.mic_required===1 ? "enforcing" : "report only"],
+    ["Whitelist entries", gw.whitelist ?? "–"],
+  ];
+  el.innerHTML = `
+    <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(330px,1fr))">
+      <div class="card"><h3>Gateway health</h3>
+        <dl class="kv">${rows.map(([k,v])=>`<dt>${k}</dt><dd>${esc(v)}</dd>`).join("")}</dl></div>
+      <div class="card"><h3>Serial feed</h3><div id="feed"></div></div>
+    </div>`;
+  const f = document.getElementById("feed");
+  f.innerHTML = (d.logs||[]).map(l=>{
+    const t = new Date(l.ts*1000).toLocaleTimeString([],{hour12:false});
+    const c = l.text.startsWith("[partial]") ? CSSV("--warn")
+            : l.text.startsWith("[pc]")      ? CSSV("--info")
+            : l.text.startsWith("[bridge]") || l.text.startsWith("[gateway]")
+              ? CSSV("--accent") : CSSV("--dim");
+    return `<div style="color:${c}">${t}  ${esc(l.text)}</div>`;}).join("");
+  f.scrollTop = f.scrollHeight;
+}
+
+/* ------------------------------------------------------------- topbar */
+document.getElementById("pauseBtn").onclick = e => {
+  paused = !paused; e.target.textContent = paused?"Resume":"Pause";
+  e.target.classList.toggle("on", paused); };
+document.getElementById("themeBtn").onclick = e => {
+  const light = document.documentElement.dataset.theme === "light";
+  document.documentElement.dataset.theme = light ? "dark" : "light";
+  e.target.textContent = light ? "Light" : "Dark";
+  try{ localStorage.setItem("lora-theme", light?"dark":"light"); }catch(_){}
+  draw(); };
+document.getElementById("csvBtn").onclick = () => {
+  const head = "iso_time,radio,node,seq,frame,mic,len,rssi_dbm,snr_db,temp_c,humidity_pct,battery_mv,node_uptime_s\n";
+  const rows = packets.map(p=>[new Date(p.ts*1000).toISOString(),p.radio,p.node,p.seq,
+    p.frame,p.mic||"",p.len,p.rssi,p.snr,
+    p.temp_cc===undefined?"":(p.temp_cc/100).toFixed(2),
+    p.hum_cp===undefined?"":(p.hum_cp/100).toFixed(2),
+    p.batt_mv??"",p.uptime_s??""].join(",")).join("\n");
+  const url = URL.createObjectURL(new Blob([head+rows],{type:"text/csv"}));
+  const a = document.createElement("a"); a.href=url; a.download="lora_packets.csv"; a.click();
+  URL.revokeObjectURL(url); };
+
+try{
+  const t = localStorage.getItem("lora-theme");
+  if (t === "light"){ document.documentElement.dataset.theme="light";
+    document.getElementById("themeBtn").textContent="Dark"; }
+}catch(_){}
+
+window.addEventListener("resize", () => { if (page==="dashboard") drawChart(); });
+window.cmd = cmd;
+go(page);
+poll();
+setInterval(poll, 1000);
+</script>
+</body>
+</html>

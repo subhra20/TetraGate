@@ -1,0 +1,39 @@
+# ---- build output -------------------------------------------------------
+# CubeIDE regenerates these from .cproject. They are large (110 MB for the
+# gateway alone) and they are not the source of truth for anything.
+Debug/
+Release/
+*.o
+*.d
+*.su
+*.map
+*.list
+*.elf
+*.bin
+*.hex
+
+# ---- IDE local state ----------------------------------------------------
+# .cproject and .project ARE tracked: without them the projects cannot be
+# imported. Only per-workspace state is ignored.
+.settings/
+.metadata/
+*.launch
+
+# ---- PC console ---------------------------------------------------------
+# Captured traffic: useful locally, meaningless to anyone else, and it
+# grows without limit.
+packets.csv
+packets-*.csv
+__pycache__/
+*.pyc
+
+# ---- secrets ------------------------------------------------------------
+# The tracked lora_keys.h holds a PUBLISHED EXAMPLE key. If you keep your
+# real key in a file of your own, name it so it lands here.
+lora_keys.local.h
+*.key
+
+# ---- OS ------------------------------------------------------------------
+Thumbs.db
+desktop.ini
+.DS_Store
