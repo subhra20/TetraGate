@@ -11,6 +11,12 @@ and on a browser console on a PC over a single USB cable.
 
 ![TetraGate gateway](docs/images/device-gateway.svg)
 
+> **Just want to try it?** [Release v1.0.0](../../releases/tag/v1.0.0) has
+> prebuilt firmware for the gateway and all four node identities — no
+> toolchain needed. Those images are built with the *published example
+> key*, so they are for evaluation, not deployment; see
+> [§12](#12-security).
+
 ---
 
 ## Contents
@@ -647,8 +653,13 @@ The bridge also writes `packets.csv` continuously next to the script.
 
 ### What you need
 
-- **STM32CubeIDE** 1.13 or newer (GCC toolchain and ST-LINK included)
+- **STM32CubeIDE** 1.13 or newer (GCC toolchain and ST-LINK included).
+  v1.0.0 was built with 1.19.0 / GCC 13.3 rel1, `Release` configuration.
 - **Python 3.9+** with `pyserial` for the console
+
+If you only want to run the device, skip this section entirely and take
+the binaries from [Release v1.0.0](../../releases/tag/v1.0.0). Come back
+here when you want your own key, your own channel plan, or a real sensor.
 
 ### Both projects
 
