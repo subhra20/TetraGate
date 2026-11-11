@@ -496,6 +496,11 @@ cd PC_Console && python lora_bridge.py
 The port is auto-detected; the gateway shows up as **ST-Link Virtual COM
 Port**. A browser opens on `http://127.0.0.1:8787`.
 
+![The console running](docs/images/console-demo.gif)
+
+*Recorded off the running gateway — the chart advances between frames
+because real packets are arriving while it records.*
+
 ### Dashboard
 
 ![Console dashboard](docs/images/console-1-dashboard.png)
