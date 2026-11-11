@@ -181,11 +181,22 @@ Datasheets for all the key parts are in [`Datasheets/`](Datasheets/).
 | R3 | 915.000 MHz | 1003 | top of the tuning range |
 | R4 | 880.000 MHz | 1004 | clear gap |
 
-Modem settings are the same on all four: **SF9, BW 250 kHz, CR 4/8, sync
-word 0x12, +17 dBm, 10-symbol preamble.** All of SF, BW, CR, the carrier
-and the sync word must match on both ends. If any one of them differs the
-link is simply **silent** — there is no error anywhere, which is what
-makes a mismatch expensive to diagnose.
+Modem settings are currently the same on all four: **SF9, BW 250 kHz,
+CR 4/8, sync word 0x12, +17 dBm, 10-symbol preamble.** None of those
+values is fixed — spreading factor, bandwidth, coding rate, frequency
+and power are all adjustable at runtime from the Radio tab on the device
+or the Configuration page of the console, with no rebuild. They are the
+settings this build happens to run, not requirements.
+
+What *is* strict is that both ends agree. All of SF, BW, CR, the carrier
+and the sync word must match on the node and the gateway radio it
+reports to. If any one of them differs the link is simply **silent** —
+there is no error anywhere, which is what makes a mismatch expensive to
+diagnose.
+
+The one thing the node cannot follow at runtime is the frequency, since
+that is a compile-time constant in `node_config.h`. Change a gateway
+radio's frequency and you must reflash its node to match.
 
 The firmware enforces a **2 MHz minimum spacing** between any two enabled
 radios, and a 868–915 MHz range, in
